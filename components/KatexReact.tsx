@@ -1,58 +1,70 @@
 import KaTeX from 'katex'
-import { memo, useEffect, useState } from 'react'
+import React, { memo, useEffect, useState, ElementType } from 'react'
 
-/**
- * 数学公式
- * @param {*} param0
- * @returns
- */
-const TeX = ({
+interface TeXProps {
+  children?: string;
+  math?: string;
+  block?: boolean;
+  errorColor?: string;
+  renderError?: (error: Error) => React.ReactNode;
+  settings?: KaTeX.KatexOptions;
+  as?: ElementType;
+  [key: string]: any;
+}
+
+interface TeXState {
+  innerHtml?: string;
+  errorElement?: React.ReactNode;
+}
+
+const TeX: React.FC<TeXProps> = memo(({
   children,
   math,
-  block,
+  block = false,
   errorColor,
   renderError,
   settings,
-  as: asComponent,
+  as: Component = block ? 'div' : 'span',
   ...props
 }) => {
-  const Component = asComponent || (block ? 'div' : 'span')
-  const content = (children ?? math)
-  const [state, setState] = useState({ innerHtml: '' })
+  const content = children ?? math;
+  const [state, setState] = useState<TeXState>({});
 
   useEffect(() => {
     try {
-      const innerHtml = KaTeX.renderToString(content, {
-        displayMode: true,
+      const innerHtml = KaTeX.renderToString(content ?? '', {
+        displayMode: block,
         errorColor,
         throwOnError: !!renderError,
         ...settings
-      })
+      });
 
-      setState({ innerHtml })
+      setState({ innerHtml });
     } catch (error) {
       if (error instanceof KaTeX.ParseError || error instanceof TypeError) {
         if (renderError) {
-          setState({ errorElement: renderError(error) })
+          setState({ errorElement: renderError(error) });
         } else {
-          setState({ innerHtml: error.message })
+          setState({ innerHtml: error.message });
         }
       } else {
-        throw error
+        throw error;
       }
     }
-  }, [block, content, errorColor, renderError, settings])
+  }, [block, content, errorColor, renderError, settings]);
 
-  if ('errorElement' in state) {
-    return state.errorElement
+  if (state.errorElement) {
+    return state.errorElement as React.ReactElement;
   }
 
   return (
     <Component
       {...props}
-      dangerouslySetInnerHTML={{ __html: state.innerHtml }}
+      dangerouslySetInnerHTML={{ __html: state.innerHtml ?? '' }}
     />
-  )
-}
+  );
+});
 
-export default memo(TeX)
+TeX.displayName = 'TeX';
+
+export default TeX;

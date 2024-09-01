@@ -1,96 +1,97 @@
-import { useEffect, useImperativeHandle, useRef } from 'react'
+import React, { useEffect, useImperativeHandle, useRef } from 'react'
+
+interface CollapseProps {
+  type?: 'horizontal' | 'vertical'
+  isOpen: boolean
+  className?: string
+  children: React.ReactNode
+  collapseRef?: React.RefObject<CollapseRef>
+  onHeightChange?: (params: { height: number; increase: boolean }) => void
+}
+
+interface CollapseRef {
+  updateCollapseHeight: (params: { height: number; increase: boolean }) => void
+}
 
 /**
- * 折叠面板组件，支持水平折叠、垂直折叠
- * @param {type:['horizontal','vertical'],isOpen} props
- * @returns
+ * Collapsible panel component, supports horizontal and vertical collapsing
  */
-const Collapse = props => {
-  const { collapseRef } = props
-  const ref = useRef(null)
-  const type = props.type || 'vertical'
+const Collapse: React.FC<CollapseProps> = ({
+  type = 'vertical',
+  isOpen,
+  className = '',
+  children,
+  collapseRef,
+  onHeightChange
+}) => {
+  const ref = useRef<HTMLDivElement>(null)
 
-  useImperativeHandle(collapseRef, () => {
-    return {
-      /**
-       * 当子元素高度变化时，可调用此方法更新折叠组件的高度
-       * @param {*} param0
-       */
-      updateCollapseHeight: ({ height, increase }) => {
-        if (props.isOpen) {
-          ref.current.style.height = ref.current.scrollHeight
-          ref.current.style.height = 'auto'
-        }
+  useImperativeHandle(collapseRef, () => ({
+    updateCollapseHeight: ({ height, increase }) => {
+      if (isOpen && ref.current) {
+        ref.current.style.height = `${ref.current.scrollHeight}px`
+        ref.current.style.height = 'auto'
       }
     }
-  })
+  }))
 
-  /**
-     * 折叠
-     * @param {*} element
-     */
-  const collapseSection = element => {
+  const collapseSection = (element: HTMLElement) => {
     const sectionHeight = element.scrollHeight
     const sectionWidth = element.scrollWidth
 
-    requestAnimationFrame(function () {
-      switch (type) {
-        case 'horizontal':
-          element.style.width = sectionWidth + 'px'
-          requestAnimationFrame(function () {
-            element.style.width = 0 + 'px'
-          })
-          break
-        case 'vertical':
-          element.style.height = sectionHeight + 'px'
-          requestAnimationFrame(function () {
-            element.style.height = 0 + 'px'
-          })
+    requestAnimationFrame(() => {
+      if (type === 'horizontal') {
+        element.style.width = `${sectionWidth}px`
+        requestAnimationFrame(() => {
+          element.style.width = '0px'
+        })
+      } else {
+        element.style.height = `${sectionHeight}px`
+        requestAnimationFrame(() => {
+          element.style.height = '0px'
+        })
       }
     })
   }
 
-  /**
-     * 展开
-     * @param {*} element
-     */
-  const expandSection = element => {
+  const expandSection = (element: HTMLElement) => {
     const sectionHeight = element.scrollHeight
     const sectionWidth = element.scrollWidth
-    let clearTime = 0
-    switch (type) {
-      case 'horizontal':
-        element.style.width = sectionWidth + 'px'
-        clearTime = setTimeout(() => {
-          element.style.width = 'auto'
-        }, 400)
-        break
-      case 'vertical':
-        element.style.height = sectionHeight + 'px'
-        clearTime = setTimeout(() => {
-          element.style.height = 'auto'
-        }, 400)
-    }
 
-    clearTimeout(clearTime)
+    if (type === 'horizontal') {
+      element.style.width = `${sectionWidth}px`
+      setTimeout(() => {
+        element.style.width = 'auto'
+      }, 400)
+    } else {
+      element.style.height = `${sectionHeight}px`
+      setTimeout(() => {
+        element.style.height = 'auto'
+      }, 400)
+    }
   }
 
   useEffect(() => {
-    if (props.isOpen) {
+    if (!ref.current) return
+
+    if (isOpen) {
       expandSection(ref.current)
     } else {
       collapseSection(ref.current)
     }
-    // 通知父组件高度变化
-    props?.onHeightChange && props.onHeightChange({ height: ref.current.scrollHeight, increase: props.isOpen })
-  }, [props.isOpen])
+
+    onHeightChange?.({ height: ref.current.scrollHeight, increase: isOpen })
+  }, [isOpen, onHeightChange])
 
   return (
-        <div ref={ref} style={type === 'vertical' ? { height: '0px', willChange: 'height' } : { width: '0px', willChange: 'width' }} className={`${props.className || ''} overflow-hidden duration-200 `}>
-            {props.children}
-        </div>
+    <div
+      ref={ref}
+      style={type === 'vertical' ? { height: '0px', willChange: 'height' } : { width: '0px', willChange: 'width' }}
+      className={`${className} overflow-hidden duration-200`}
+    >
+      {children}
+    </div>
   )
 }
-Collapse.defaultProps = { isOpen: false }
 
 export default Collapse

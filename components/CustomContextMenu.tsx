@@ -1,39 +1,30 @@
-import useWindowSize from '@/hooks/useWindowSize'
-import { siteConfig } from '@/lib/config'
-import { useGlobal } from '@/lib/global'
-import { THEMES, saveDarkModeToLocalStorage } from '@/themes/theme'
-import Link from 'next/link'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import useWindowSize from '@/hooks/useWindowSize'
+import { useGlobal } from '@/lib/global'
+import { siteConfig } from '@/lib/config'
+import { THEMES, saveDarkModeToLocalStorage } from '@/themes/theme'
 
-/**
- * 自定义右键菜单
- * @param {*} props
- * @returns
- */
-export default function CustomContextMenu(props) {
+interface CustomContextMenuProps {
+  allNavPages: Array<{ slug: string }>
+}
+
+const CustomContextMenu: React.FC<CustomContextMenuProps> = ({ allNavPages }) => {
   const [position, setPosition] = useState({ x: '0px', y: '0px' })
   const [show, setShow] = useState(false)
   const { isDarkMode, updateDarkMode, locale } = useGlobal()
-  const menuRef = useRef(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const windowSize = useWindowSize()
   const [width, setWidth] = useState(0)
   const [height, setHeight] = useState(0)
-
-  const { allNavPages } = props
   const router = useRouter()
-  /**
-   * 随机跳转文章
-   */
-  function handleJumpToRandomPost() {
-    const randomIndex = Math.floor(Math.random() * allNavPages.length)
-    const randomPost = allNavPages[randomIndex]
-    router.push(`${siteConfig('SUB_PATH', '')}/${randomPost?.slug}`)
-  }
 
   useLayoutEffect(() => {
-    setWidth(menuRef.current.offsetWidth)
-    setHeight(menuRef.current.offsetHeight)
+    if (menuRef.current) {
+      setWidth(menuRef.current.offsetWidth)
+      setHeight(menuRef.current.offsetHeight)
+    }
   }, [])
 
   useEffect(() => {
@@ -41,27 +32,15 @@ export default function CustomContextMenu(props) {
   }, [router])
 
   useEffect(() => {
-    const handleContextMenu = event => {
+    const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
-      // 计算点击位置加菜单宽高是否超出屏幕，如果超出则贴边弹出
-      const x =
-        event.clientX < windowSize.width - width
-          ? event.clientX
-          : windowSize.width - width
-      const y =
-        event.clientY < windowSize.height - height
-          ? event.clientY
-          : windowSize.height - height
+      const x = Math.min(event.clientX, windowSize.width - width)
+      const y = Math.min(event.clientY, windowSize.height - height)
       setPosition({ y: `${y}px`, x: `${x}px` })
       setShow(true)
     }
 
-    /**
-     * 鼠标点击即关闭菜单
-     */
-    const handleClick = event => {
-      setShow(false)
-    }
+    const handleClick = () => setShow(false)
 
     window.addEventListener('contextmenu', handleContextMenu)
     window.addEventListener('click', handleClick)
@@ -70,148 +49,114 @@ export default function CustomContextMenu(props) {
       window.removeEventListener('contextmenu', handleContextMenu)
       window.removeEventListener('click', handleClick)
     }
-  }, [windowSize])
+  }, [windowSize, width, height])
 
-  function handleBack() {
-    window.history.back()
+  const handleJumpToRandomPost = () => {
+    const randomPost = allNavPages[Math.floor(Math.random() * allNavPages.length)]
+    router.push(`${siteConfig('SUB_PATH', '')}/${randomPost?.slug}`)
   }
 
-  function handleForward() {
-    window.history.forward()
-  }
+  const handleBack = () => window.history.back()
+  const handleForward = () => window.history.forward()
+  const handleRefresh = () => window.location.reload()
+  const handleScrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' })
 
-  function handleRefresh() {
-    window.location.reload()
-  }
-
-  function handleScrollTop() {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  function handleCopyLink() {
+  const handleCopyLink = () => {
     const url = window.location.href
-    navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        // console.log('页面地址已复制')
-        alert(`${locale.COMMON.PAGE_URL_COPIED} : ${url}`)
-      })
-      .catch(error => {
-        console.error('复制页面地址失败:', error)
-      })
+    navigator.clipboard.writeText(url)
+      .then(() => alert(`${locale.COMMON.PAGE_URL_COPIED} : ${url}`))
+      .catch(error => console.error('Failed to copy page URL:', error))
   }
 
-  /**
-   * 切换主题
-   */
-  function handleChangeTheme() {
-    const randomTheme = THEMES[Math.floor(Math.random() * THEMES.length)] // 从THEMES数组中 随机取一个主题
-    const query = router.query
-    query.theme = randomTheme
-    router.push({ pathname: router.pathname, query })
+  const handleChangeTheme = () => {
+    const randomTheme = THEMES[Math.floor(Math.random() * THEMES.length)]
+    router.push({ pathname: router.pathname, query: { ...router.query, theme: randomTheme } })
   }
 
-  /**
-   * 复制内容
-   */
-  function handleCopy() {
-    const selectedText = document.getSelection().toString()
+  const handleCopy = () => {
+    const selectedText = window.getSelection()?.toString()
     if (selectedText) {
-      const tempInput = document.createElement('input');
-      tempInput.value = selectedText;
-      document.body.appendChild(tempInput);
-      tempInput.select();
-      document.execCommand('copy');
-      if (tempInput && tempInput.parentNode && tempInput.parentNode.contains(tempInput)) {
-        tempInput.parentNode.removeChild(tempInput);
-      }
-      // alert("Text copied: " + selectedText);
-    } else {
-      // alert("Please select some text first.");
+      navigator.clipboard.writeText(selectedText)
+        .then(() => console.log("Text copied"))
+        .catch(err => console.error("Failed to copy text:", err))
     }
   }
 
-  function handleChangeDarkMode() {
+  const handleChangeDarkMode = () => {
     const newStatus = !isDarkMode
     saveDarkModeToLocalStorage(newStatus)
     updateDarkMode(newStatus)
-    const htmlElement = document.getElementsByTagName('html')[0]
-    htmlElement.classList?.remove(newStatus ? 'light' : 'dark')
-    htmlElement.classList?.add(newStatus ? 'dark' : 'light')
+    document.documentElement.classList.toggle('dark', newStatus)
+    document.documentElement.classList.toggle('light', !newStatus)
   }
 
-  // 一些配置变量
-  const CUSTOM_RIGHT_CLICK_CONTEXT_MENU_RANDOM_POST = siteConfig(
-    'CUSTOM_RIGHT_CLICK_CONTEXT_MENU_RANDOM_POST'
-  )
-  const CUSTOM_RIGHT_CLICK_CONTEXT_MENU_CATEGORY = siteConfig(
-    'CUSTOM_RIGHT_CLICK_CONTEXT_MENU_CATEGORY'
-  )
-  const CUSTOM_RIGHT_CLICK_CONTEXT_MENU_TAG = siteConfig(
-    'CUSTOM_RIGHT_CLICK_CONTEXT_MENU_TAG'
-  )
-  const CAN_COPY = siteConfig('CAN_COPY')
-  const CUSTOM_RIGHT_CLICK_CONTEXT_MENU_SHARE_LINK = siteConfig(
-    'CUSTOM_RIGHT_CLICK_CONTEXT_MENU_SHARE_LINK'
-  )
-  const CUSTOM_RIGHT_CLICK_CONTEXT_MENU_DARK_MODE = siteConfig(
-    'CUSTOM_RIGHT_CLICK_CONTEXT_MENU_DARK_MODE'
-  )
-  const CUSTOM_RIGHT_CLICK_CONTEXT_MENU_THEME_SWITCH = siteConfig(
-    'CUSTOM_RIGHT_CLICK_CONTEXT_MENU_THEME_SWITCH'
-  )
+  // Configuration variables
+  const CONFIG = {
+    RANDOM_POST: siteConfig('CUSTOM_RIGHT_CLICK_CONTEXT_MENU_RANDOM_POST'),
+    CATEGORY: siteConfig('CUSTOM_RIGHT_CLICK_CONTEXT_MENU_CATEGORY'),
+    TAG: siteConfig('CUSTOM_RIGHT_CLICK_CONTEXT_MENU_TAG'),
+    CAN_COPY: siteConfig('CAN_COPY'),
+    SHARE_LINK: siteConfig('CUSTOM_RIGHT_CLICK_CONTEXT_MENU_SHARE_LINK'),
+    DARK_MODE: siteConfig('CUSTOM_RIGHT_CLICK_CONTEXT_MENU_DARK_MODE'),
+    THEME_SWITCH: siteConfig('CUSTOM_RIGHT_CLICK_CONTEXT_MENU_THEME_SWITCH')
+  }
+
   return (
     <div
       ref={menuRef}
       style={{ top: position.y, left: position.x }}
-      className={`${show ? '' : 'invisible opacity-0'} select-none transition-opacity duration-200 fixed z-50`}>
-      {/* 菜单内容 */}
+      className={`${show ? '' : 'invisible opacity-0'} select-none transition-opacity duration-200 fixed z-50`}
+    >
+      {/* Menu content */}
       <div className='rounded-xl w-52 dark:hover:border-yellow-600 bg-white dark:bg-[#040404] dark:text-gray-200 dark:border-gray-600 p-3 border drop-shadow-lg flex-col duration-300 transition-colors'>
-        {/* 顶部导航按钮 */}
+        {/* Navigation buttons */}
         <div className='flex justify-between'>
-          <i
-            onClick={handleBack}
-            className='hover:bg-blue-600 hover:text-white px-2 py-2 text-center w-8 rounded cursor-pointer fa-solid fa-arrow-left'></i>
-          <i
-            onClick={handleForward}
-            className='hover:bg-blue-600 hover:text-white px-2 py-2 text-center w-8 rounded cursor-pointer fa-solid fa-arrow-right'></i>
-          <i
-            onClick={handleRefresh}
-            className='hover:bg-blue-600 hover:text-white px-2 py-2 text-center w-8 rounded cursor-pointer fa-solid fa-rotate-right'></i>
-          <i
-            onClick={handleScrollTop}
-            className='hover:bg-blue-600 hover:text-white px-2 py-2 text-center w-8 rounded cursor-pointer fa-solid fa-arrow-up'></i>
+          {[
+            { icon: 'fa-arrow-left', onClick: handleBack },
+            { icon: 'fa-arrow-right', onClick: handleForward },
+            { icon: 'fa-rotate-right', onClick: handleRefresh },
+            { icon: 'fa-arrow-up', onClick: handleScrollTop }
+          ].map((button, index) => (
+            <i
+              key={index}
+              onClick={button.onClick}
+              className={`hover:bg-blue-600 hover:text-white px-2 py-2 text-center w-8 rounded cursor-pointer fa-solid ${button.icon}`}
+            />
+          ))}
         </div>
 
         <hr className='my-2 border-dashed' />
 
-        {/* 跳转导航按钮 */}
+        {/* Jump navigation buttons */}
         <div className='w-full px-2'>
-          {CUSTOM_RIGHT_CLICK_CONTEXT_MENU_RANDOM_POST && (
+          {CONFIG.RANDOM_POST && (
             <div
               onClick={handleJumpToRandomPost}
               title={locale.MENU.WALK_AROUND}
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
               <i className='fa-solid fa-podcast mr-2' />
               <div className='whitespace-nowrap'>{locale.MENU.WALK_AROUND}</div>
             </div>
           )}
 
-          {CUSTOM_RIGHT_CLICK_CONTEXT_MENU_CATEGORY && (
+          {CONFIG.CATEGORY && (
             <Link
               href='/category'
               title={locale.MENU.CATEGORY}
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
               <i className='fa-solid fa-square-minus mr-2' />
               <div className='whitespace-nowrap'>{locale.MENU.CATEGORY}</div>
             </Link>
           )}
 
-          {CUSTOM_RIGHT_CLICK_CONTEXT_MENU_TAG && (
+          {CONFIG.TAG && (
             <Link
               href='/tag'
               title={locale.MENU.TAGS}
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
               <i className='fa-solid fa-tag mr-2' />
               <div className='whitespace-nowrap'>{locale.MENU.TAGS}</div>
             </Link>
@@ -220,56 +165,51 @@ export default function CustomContextMenu(props) {
 
         <hr className='my-2 border-dashed' />
 
-        {/* 功能按钮 */}
+        {/* Function buttons */}
         <div className='w-full px-2'>
-          {CAN_COPY && (
+          {CONFIG.CAN_COPY && (
             <div
               onClick={handleCopy}
               title={locale.MENU.COPY}
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
               <i className='fa-solid fa-copy mr-2' />
               <div className='whitespace-nowrap'>{locale.MENU.COPY}</div>
             </div>
           )}
 
-          {CUSTOM_RIGHT_CLICK_CONTEXT_MENU_SHARE_LINK && (
+          {CONFIG.SHARE_LINK && (
             <div
               onClick={handleCopyLink}
               title={locale.MENU.SHARE_URL}
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
               <i className='fa-solid fa-arrow-up-right-from-square mr-2' />
               <div className='whitespace-nowrap'>{locale.MENU.SHARE_URL}</div>
             </div>
           )}
 
-          {CUSTOM_RIGHT_CLICK_CONTEXT_MENU_DARK_MODE && (
+          {CONFIG.DARK_MODE && (
             <div
               onClick={handleChangeDarkMode}
-              title={
-                isDarkMode ? locale.MENU.LIGHT_MODE : locale.MENU.DARK_MODE
-              }
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
-              {isDarkMode ? (
-                <i className='fa-regular fa-sun mr-2' />
-              ) : (
-                <i className='fa-regular fa-moon mr-2' />
-              )}
+              title={isDarkMode ? locale.MENU.LIGHT_MODE : locale.MENU.DARK_MODE}
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
+              <i className={`fa-regular ${isDarkMode ? 'fa-sun' : 'fa-moon'} mr-2`} />
               <div className='whitespace-nowrap'>
-                {' '}
                 {isDarkMode ? locale.MENU.LIGHT_MODE : locale.MENU.DARK_MODE}
               </div>
             </div>
           )}
 
-          {CUSTOM_RIGHT_CLICK_CONTEXT_MENU_THEME_SWITCH && (
+          {CONFIG.THEME_SWITCH && (
             <div
               onClick={handleChangeTheme}
               title={locale.MENU.THEME_SWITCH}
-              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'>
+              className='w-full px-2 h-10 flex justify-start items-center flex-nowrap cursor-pointer hover:bg-blue-600 hover:text-white rounded-lg duration-200 transition-all'
+            >
               <i className='fa-solid fa-palette mr-2' />
-              <div className='whitespace-nowrap'>
-                {locale.MENU.THEME_SWITCH}
-              </div>
+              <div className='whitespace-nowrap'>{locale.MENU.THEME_SWITCH}</div>
             </div>
           )}
         </div>
@@ -277,3 +217,5 @@ export default function CustomContextMenu(props) {
     </div>
   )
 }
+
+export default CustomContextMenu
